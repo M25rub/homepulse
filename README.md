@@ -109,7 +109,7 @@ Choose **Add Servers > Add manually**, Transport **Streamable HTTP**, URL `http:
 - Settings page: text size (4 levels), high-contrast mode, reduced motion, read-aloud and voice input (browser speech features; quality depends on the browser and installed voices).
 - Full keyboard use, visible focus, skip link, live-region announcements, touch targets of 44 px or more.
 - Six languages: English, Urdu, Arabic, Hindi, Spanish and French, with right-to-left layout for Urdu and Arabic.
-- **Checked** with the axe-core automated audit (WCAG 2.0/2.1 A and AA plus best practices): no violations on any of the 7 pages, in normal and high-contrast modes, on desktop and phone widths.
+- **Checked** with the axe-core automated audit (WCAG 2.0/2.1 A and AA plus best practices): no violations on the original 7 pages, in normal and high-contrast modes, on desktop and phone widths. After later additions, the Home, Devices and Alexa+ pages were re-checked in normal mode on desktop with no violations; the other modes were not re-run.
 - **Not checked:** testing with a real screen reader (NVDA, VoiceOver) or with real users. Automated tools find only part of the problems, so treat this as a good start, not a guarantee. Translations were written by an AI model and have not been reviewed by native speakers.
 
 ## Honest limits
@@ -119,6 +119,7 @@ Choose **Add Servers > Add manually**, Transport **Streamable HTTP**, URL `http:
 - Live checks reach out from the machine running HomePulse, so only add addresses you are happy for it to contact.
 - Device states change only through the MCP tools and the live-device checks. The website's "Run" buttons on the simulated sample home are a demo and do not keep their states.
 - The built-in helper on the website is a keyword helper, not an AI model. It does read the real Pulse.
+- The live watch only runs while HomePulse is running. It is not a background service that survives a reboot.
 - One process owns `home.json`. Many users or many servers would need a real database.
 - The demo token is public. Do not expose this server to the internet with it.
 - Tested on Python 3.13 (Linux) and run by hand on Python 3.14 (Windows). Dependency versions are pinned in `requirements.txt`.
@@ -137,6 +138,8 @@ Choose **Add Servers > Add manually**, Transport **Streamable HTTP**, URL `http:
     main.py          the website's API, the /mcp endpoint and its bearer-token check
     run.py           one-command start (opens the browser, handles a busy port)
     start.bat        Windows: double-click to start
+    start.command    Mac / Linux start
+    docs/            demo script, Devpost text, MCP Inspector proof, screenshots
     web/             the website (plain HTML, CSS and JavaScript, 6 languages, self-hosted fonts)
     tests/           pytest suite (70 tests), including ones that unplug real local servers
 
