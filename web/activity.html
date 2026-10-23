@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" data-size="normal" data-contrast="normal" data-motion="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activity - HomePulse</title>
+<meta name="theme-color" content="#17100B">
+<link rel="preload" href="/fonts/JosefinSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</head>
+<body data-page="activity">
+<main>
+  <div class="container">
+
+    <div class="page-head head-row">
+      <div>
+        <h1 data-i18n="nav_activity">Activity</h1>
+        <p data-i18n="act_sub">Every routine you've run, and what really happened.</p>
+      </div>
+      <button class="btn" id="clearBtn" type="button" data-i18n="act_clear" hidden>Clear history</button>
+    </div>
+
+    <section class="stats" id="stats" aria-label="Summary" hidden>
+      <div class="stat"><b id="sRuns">0</b><span data-i18n="act_runs">Runs</span></div>
+      <div class="stat"><b id="sRate">-</b><span data-i18n="act_rate">Fully confirmed</span></div>
+      <div class="stat"><b id="sMost" style="font-size:clamp(1.6rem,3vw,2.4rem)">-</b><span data-i18n="act_most">Needs most attention</span></div>
+    </section>
+
+    <section class="section" aria-label="Runs">
+      <div id="runs"></div>
+    </section>
+
+    <section class="section" id="diagBox" aria-labelledby="h-diag" hidden>
+      <div class="panel">
+        <h2 id="h-diag" data-i18n="act_diag_t">What the pattern suggests</h2>
+        <ul id="diag" class="diag"></ul>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+HP.onReady(() => {
+  let history = [];
+
+  async function load() {
+    try { history = await HP.api("/history"); draw(); }
+    catch (e) { HP.serverError(); }
+  }
+
+  function runState(h) {
+    if (h.results.some(r => !r.verified)) return "bad";
+    if (h.results.some(r => r.outcome.indexOf("recovered") === 0)) return "retry";
+    return "ok";
+  }
+
+  function draw() {
+    const box = $("runs");
+    box.innerHTML = "";
+    const has = history.length > 0;
+    $("stats").hidden = !has;
+    $("clearBtn").hidden = !has;
+    $("diagBox").hidden = true;
+
+    if (!has) {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.innerHTML = "<h3>" + HP.esc(HP.t("act_empty_t", "Nothing here yet")) + "</h3><p>" + HP.esc(HP.t("act_empty_p", "Run a routine and its results will appear here.")) + "</p>";
+      const a = document.createElement("a");
+      a.className = "btn primary"; a.href = "/routine.html"; a.textContent = HP.t("home_cta", "Run a routine");
+      e.appendChild(a);
+      box.appendChild(e);
+      return;
+    }
+
+    /* per-device problem counts */
+    const stat = {};
+    history.forEach(h => h.results.forEach(r => {
+      const s = stat[r.device] || (stat[r.device] = {n: 0, k: 0, hard: 0, out: {}});
+      s.n++;
+      if (r.outcome !== "confirmed") {
+        s.k++; s.out[r.outcome] = (s.out[r.outcome] || 0) + 1;
+        if (r.outcome.indexOf("recovered") !== 0) s.hard++;   // never answered: worse than needing a retry
+      }
+    }));
+    const full = history.filter(h => h.total > 0 && h.confirmed === h.total).length;
+    const worst = Object.keys(stat).filter(d => stat[d].k > 0).sort((a, b) => (stat[b].hard - stat[a].hard) || (stat[b].k - stat[a].k));
+
+    $("sRuns").textContent = history.length;
+    $("sRate").textContent = Math.round(full / history.length * 100) + "%";
+    $("sMost").textContent = worst.length ? HP.devName(worst[0]) : HP.t("act_nothing", "Nothing so far");
+
+    history.forEach(h => {
+      const det = document.createElement("details");
+      det.className = "run";
+      const state = runState(h);
+      det.innerHTML = '<summary><div><b>' + HP.esc(HP.routineName(h.routine)) + "</b><small>" + HP.esc(h.time) + "</small></div>" +
+        '<span class="pill" data-s="' + state + '">' + HP.esc(HP.t("act_of", "{a} of {b} confirmed", {a: h.confirmed, b: h.total})) + "</span></summary>";
+      const ul = document.createElement("ul");
+      ul.className = "res-list";
+      h.results.forEach(r => {
+        const d = HP.describe(r);
+        const li = document.createElement("li");
+        li.dataset.s = d.s; li.style.animation = "none";
+        li.innerHTML = '<span class="dot" aria-hidden="true">' + d.ic + "</span>" +
+          '<div class="res-main"><b>' + HP.esc(HP.devName(r.device)) + "</b><span>" + HP.esc(d.text) + "</span></div>" +
+          '<span class="pill" data-s="' + d.s + '">' + HP.esc(d.word) + "</span>";
+        ul.appendChild(li);
+      });
+      det.appendChild(ul);
+      box.appendChild(det);
+    });
+
+    /* what the pattern suggests */
+    const dl = $("diag");
+    dl.innerHTML = "";
+    worst.slice(0, 5).forEach(name => {
+      const s = stat[name];
+      const top = Object.keys(s.out).sort((a, b) => s.out[b] - s.out[a])[0] || "";
+      let why;
+      if (top.indexOf("recovered by retry") === 0) why = HP.t("diag_retry", "It sometimes ignores the first message. A weak signal is the usual reason.");
+      else if (top.indexOf("recovered by local fallback") === 0) why = HP.t("diag_fb", "Its internet route is unreliable, but the backup route works.");
+      else why = HP.t("diag_bad", "It never answered. It may be switched off, out of battery or out of Wi-Fi range.");
+      const li = document.createElement("li");
+      li.innerHTML = "<b>" + HP.esc(HP.t("act_dev", "{d}: a problem in {k} of {n} runs", {d: HP.devName(name), k: s.k, n: s.n})) + "</b><span>" + HP.esc(why) + "</span>";
+      dl.appendChild(li);
+    });
+    $("diagBox").hidden = worst.length === 0;
+  }
+
+  $("clearBtn").onclick = async () => {
+    if (!confirm(HP.t("act_confirm", "Clear all activity history?"))) return;
+    try {
+      await HP.api("/history", "DELETE");
+      HP.notify(HP.t("act_cleared", "History cleared."));
+      load();
+    } catch (e) { HP.serverError(); }
+  };
+
+  HP.onLang(draw);
+  load();
+});
+</script>
+</body>
+</html>

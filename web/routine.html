@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en" data-size="normal" data-contrast="normal" data-motion="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Routines - HomePulse</title>
+<meta name="theme-color" content="#17100B">
+<link rel="preload" href="/fonts/JosefinSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</head>
+<body data-page="routine">
+<main>
+  <div class="container">
+
+    <div class="page-head head-row">
+      <div>
+        <h1 data-i18n="nav_routines">Routines</h1>
+        <p data-i18n="rt_sub">One tap does several jobs. HomePulse then checks that each one really happened.</p>
+      </div>
+      <button class="btn big" id="toggleCreate" type="button" aria-expanded="false" aria-controls="createPanel" data-i18n="rt_new">New routine</button>
+    </div>
+
+    <section id="createPanel" class="section" aria-labelledby="h-create" hidden>
+      <div class="panel">
+        <h2 id="h-create" data-i18n="rt_create_t">Create a routine</h2>
+        <p data-i18n="rt_create_p">Say what done looks like, and HomePulse will check it for you.</p>
+        <form id="routineForm" class="form" style="max-width:none" novalidate>
+          <div class="field" style="max-width:36rem">
+            <label for="r_name" data-i18n="rt_name">Routine name</label>
+            <input id="r_name" autocomplete="off" placeholder="e.g. Goodnight" data-i18n-placeholder="rt_ph_name">
+          </div>
+          <fieldset>
+            <legend data-i18n="rt_do">What should it do?</legend>
+            <div id="steps"></div>
+            <div><button class="btn small" type="button" id="addStep" data-i18n="rt_add_step">Add another step</button></div>
+          </fieldset>
+          <div class="actions">
+            <button class="btn primary big" type="submit" data-i18n="rt_save">Save routine</button>
+            <button class="btn big" type="button" id="cancelCreate" data-i18n="btn_cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="section" aria-label="Routines">
+      <h2 class="sr-only" data-i18n="nav_routines">Routines</h2>
+      <div id="list"></div>
+    </section>
+
+    <section id="resultPanel" class="result-panel" aria-labelledby="h-res" hidden>
+      <h2 id="h-res" tabindex="-1" data-i18n="res_title">What happened</h2>
+      <p id="summary" class="summary"></p>
+      <div id="meter" class="meter" role="img" aria-label="Result"><span></span></div>
+      <button class="btn small" id="readAloud" type="button" data-i18n="btn_read">Read this aloud</button>
+      <ul id="results" class="res-list"></ul>
+    </section>
+
+  </div>
+</main>
+
+<script>
+HP.onReady(async () => {
+  let devices = {}, routines = {}, shown = null;
+  try { await HP.loadCatalog(); } catch (e) { HP.serverError(); }
+  const CAT = () => HP.catalog || {capabilities: {}, categories: {}};
+
+  async function load() {
+    try {
+      devices = await HP.api("/devices");
+      routines = await HP.api("/routines");
+    } catch (e) { HP.serverError(); return false; }
+    drawList();
+    refreshRows();
+    return true;
+  }
+
+  /* ---------- describing steps in words ---------- */
+  function targetName(t) {
+    if (t.type === "device") { const d = devices[t.id]; return d ? HP.devName(d.name) : t.id; }
+    if (t.type === "room") return HP.roomName(t.id);
+    if (t.type === "category") return HP.catLabel(t.id);
+    return "*";
+  }
+  function actionLabel(a) {
+    return targetName(a.target) + ": " + HP.capLabel(a.capability) + " " + HP.valueLabel(a.capability, a.value);
+  }
+
+  /* ---------- the list of routines ---------- */
+  function drawList() {
+    const box = $("list");
+    box.innerHTML = "";
+    const names = Object.keys(routines);
+    if (!names.length) {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.innerHTML = "<h3>" + HP.esc(HP.t("rt_empty_t", "No routines yet")) + "</h3><p>" + HP.esc(HP.t("rt_empty_p", "Create your first routine, or start with a sample home.")) + "</p>";
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn primary"; b.textContent = HP.t("btn_sample", "Load a sample home");
+      b.onclick = async () => { try { await HP.loadSample(); await load(); } catch (err) { HP.serverError(); } };
+      e.appendChild(b);
+      box.appendChild(e);
+      return;
+    }
+    names.forEach(n => {
+      const actions = routines[n].actions || [];
+      const list = actions.map(actionLabel).join(", ");
+      const row = document.createElement("div");
+      row.className = "item";
+      row.innerHTML = '<div class="item-main"><h3>' + HP.esc(HP.routineName(n)) + "</h3><p>" +
+        HP.esc(HP.t("rt_meta", "Steps: {n}. {list}", {n: actions.length, list: list})) + "</p></div>";
+      const bar = document.createElement("div");
+      bar.className = "item-actions";
+      const run = document.createElement("button");
+      run.type = "button"; run.className = "btn primary"; run.setAttribute("data-run", "");
+      run.textContent = HP.t("btn_run", "Run");
+      run.setAttribute("aria-label", HP.t("btn_run", "Run") + ": " + HP.routineName(n));
+      run.onclick = () => runRoutine(n);
+      const del = document.createElement("button");
+      del.type = "button"; del.className = "btn small";
+      del.textContent = HP.t("btn_delete", "Delete");
+      del.setAttribute("aria-label", HP.t("btn_delete", "Delete") + ": " + HP.routineName(n));
+      del.onclick = async () => {
+        if (!confirm(HP.t("rt_confirm", "Delete the routine {n}?", {n: '"' + HP.routineName(n) + '"'}))) return;
+        try {
+          await HP.api("/routines/" + encodeURIComponent(n), "DELETE");
+          HP.notify(HP.t("rt_deleted", "{n} was deleted.", {n: HP.routineName(n)}));
+          load();
+        } catch (e) { HP.serverError(); }
+      };
+      bar.append(run, del);
+      row.appendChild(bar);
+      box.appendChild(row);
+    });
+  }
+
+  /* ---------- running a routine ---------- */
+  async function runRoutine(name) {
+    const btns = document.querySelectorAll("[data-run]");
+    btns.forEach(b => { b.disabled = true; });
+    HP.say(HP.t("rt_running", "Running {n}. Please wait.", {n: HP.routineName(name)}));
+    try {
+      const data = await HP.api("/run/" + encodeURIComponent(name), "POST");
+      shown = {name: name, data: data};
+      renderResult(true);
+    } catch (e) {
+      HP.notify(HP.t("rt_err", "Something went wrong running that routine. Please try again."), "bad");
+    }
+    btns.forEach(b => { b.disabled = false; });
+  }
+
+  function renderResult(focus) {
+    if (!shown) return;
+    const name = HP.routineName(shown.name);
+    const rs = shown.data.results;
+    const unmatched = shown.data.unmatched || 0;
+    const total = rs.length;
+    const ok = rs.filter(r => r.verified).length;
+    const extra = rs.filter(r => r.outcome.indexOf("recovered") === 0).length;
+    const bad = rs.filter(r => !r.verified);
+    const badNames = Array.from(new Set(bad.map(r => HP.devName(r.device))));
+
+    let text;
+    if (total === 0) {
+      text = HP.t("res_none", "{r} didn't match any of your devices yet.", {r: name});
+    } else {
+      text = HP.t("res_summary", "{r} finished. {ok} of {t} devices confirmed.", {r: name, ok: ok, t: total});
+      if (extra) text += " " + HP.t("res_extra", "{x} needed a little extra effort but worked.", {x: extra});
+      text += " " + (bad.length
+        ? HP.t("res_bad", "{b} needs your attention: {names}.", {b: bad.length, names: badNames.join(", ")})
+        : HP.t("res_good", "Everything is as it should be."));
+    }
+    if (unmatched) text += " " + HP.t("rt_unmatched", "{n} steps matched no device.", {n: unmatched});
+    $("summary").textContent = text;
+    $("resultPanel").hidden = false;
+
+    const pct = total ? Math.round(ok / total * 100) : 0;
+    const m = $("meter");
+    m.className = "meter" + (bad.length ? " warn" : "");
+    m.setAttribute("aria-label", total ? ok + " / " + total : "0");
+    const bar = m.firstElementChild;
+    bar.style.width = "0%";
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = pct + "%"; }));
+
+    const ul = $("results");
+    ul.innerHTML = "";
+    rs.forEach((r, i) => {
+      const d = HP.describe(r);
+      const li = document.createElement("li");
+      li.dataset.s = d.s;
+      li.style.animationDelay = (i * 0.08) + "s";
+      let asked = HP.t("res_asked", "Asked for: {w}.", {w: HP.askLabel(r.capability, r.wanted)});
+      if (!r.verified && r.reported !== undefined) {
+        asked += " " + HP.t("res_reported", "The device reports: {w}.", {w: HP.valueLabel(r.capability, r.reported)});
+      }
+      li.innerHTML = '<span class="dot" aria-hidden="true">' + d.ic + "</span>" +
+        '<div class="res-main"><b>' + HP.esc(HP.devName(r.device)) + "</b><span>" + HP.esc(asked + " " + d.text) + "</span></div>" +
+        '<span class="pill" data-s="' + d.s + '">' + HP.esc(d.word) + "</span>";
+      ul.appendChild(li);
+    });
+
+    if (focus) {
+      HP.say(text);
+      $("resultPanel").scrollIntoView({behavior: HP.reduced() ? "auto" : "smooth", block: "start"});
+      $("h-res").focus({preventScroll: true});
+    }
+  }
+  $("readAloud").onclick = () => HP.speak($("summary").textContent);
+
+  /* ---------- building a routine: a target, what to change, and a value ---------- */
+  function addGroup(sel, label, items) {
+    if (!items.length) return;
+    const g = document.createElement("optgroup");
+    g.label = label;
+    items.forEach(it => {
+      const o = document.createElement("option");
+      o.value = it[0]; o.textContent = it[1];
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
+  }
+  function fillTargets(sel, keep) {
+    sel.innerHTML = "";
+    const devs = Object.values(devices);
+    const rooms = Array.from(new Set(devs.map(d => d.room).filter(Boolean)));
+    const cats = devs.length ? Array.from(new Set(devs.map(d => d.category))) : Object.keys(CAT().categories);
+    const all = n => HP.t("rt_all", "{k} (all)", {k: n});
+    addGroup(sel, HP.t("rt_grp_room", "All devices in a room"), rooms.map(r => ["r:" + r, all(HP.roomName(r))]));
+    addGroup(sel, HP.t("rt_grp_kind", "All devices of a kind"), cats.map(c => ["k:" + c, all(HP.catLabel(c))]));
+    addGroup(sel, HP.t("rt_grp_one", "Just one device"), devs.map(d => ["d:" + d.id, HP.devName(d.name)]));
+    if (keep && Array.from(sel.options).some(o => o.value === keep)) sel.value = keep;
+  }
+  function targetCaps(v) {
+    const id = v.slice(2), out = [];
+    const add = list => list.forEach(x => { if (out.indexOf(x) < 0) out.push(x); });
+    if (v.indexOf("d:") === 0) return (devices[id] || {capabilities: []}).capabilities.slice();
+    Object.values(devices).forEach(d => {
+      if ((v.indexOf("r:") === 0 && d.room === id) || (v.indexOf("k:") === 0 && d.category === id)) add(d.capabilities);
+    });
+    if (v.indexOf("k:") === 0) add(CAT().categories[id] || []);
+    return out;
+  }
+  function fillCaps(row, keep) {
+    const caps = targetCaps(row.querySelector(".s-target").value);
+    const cs = row.querySelector(".s-cap");
+    HP.fillSelect(cs, caps, HP.capLabel, caps.indexOf(keep) >= 0 ? keep : undefined);
+    cs.hidden = caps.length <= 1;     // nothing to choose, so don't show a pointless box
+  }
+  function fillValue(row, keep) {
+    const cap = row.querySelector(".s-cap").value;
+    const spec = CAT().capabilities[cap];
+    const holder = row.querySelector(".val-wrap");
+    holder.innerHTML = "";
+    if (!spec) return;
+    const label = HP.t("rt_value", "Value") + ": " + HP.capLabel(cap);
+    if (spec.type === "range") {
+      const input = document.createElement("input");
+      input.type = "range"; input.className = "s-value";
+      input.min = spec.min; input.max = spec.max; input.step = 1;
+      input.value = (keep !== undefined && keep !== "" && !isNaN(Number(keep))) ? keep : spec.default;
+      const out = document.createElement("output");
+      out.className = "s-out";
+      const show = () => { out.textContent = input.value + (spec.unit || ""); input.setAttribute("aria-valuetext", out.textContent); };
+      input.oninput = show; show();
+      input.setAttribute("aria-label", label);
+      holder.append(input, out);
+    } else {
+      const sel = document.createElement("select");
+      sel.className = "s-value"; sel.setAttribute("aria-label", label);
+      HP.fillSelect(sel, spec.options, HP.stateLabel, spec.options.indexOf(keep) >= 0 ? keep : undefined);
+      holder.appendChild(sel);
+    }
+  }
+  function renumber() {
+    const rows = Array.from($("steps").children);
+    rows.forEach((row, i) => {
+      const n = i + 1;
+      row.querySelector(".s-target").setAttribute("aria-label", HP.t("step_kind", "Step {n}: kind of device", {n: n}));
+      row.querySelector(".s-cap").setAttribute("aria-label", HP.t("rt_what", "What to change") + " (" + n + ")");
+      const rm = row.querySelector(".s-remove");
+      rm.setAttribute("aria-label", HP.t("step_remove", "Remove step {n}", {n: n}));
+      rm.hidden = rows.length === 1;
+    });
+  }
+  function labelRow(row) {
+    row.querySelector(".t-set").textContent = HP.t("rt_set", "Set");
+    row.querySelector(".t-to").textContent = HP.t("rt_to", "to");
+    row.querySelector(".s-remove").textContent = HP.t("btn_remove", "Remove");
+  }
+  function buildRow(row, keep) {
+    keep = keep || {};
+    fillTargets(row.querySelector(".s-target"), keep.target);
+    fillCaps(row, keep.cap);
+    fillValue(row, keep.value);
+    labelRow(row);
+  }
+  function readRow(row) {
+    const t = row.querySelector(".s-target").value;
+    const cap = row.querySelector(".s-cap").value;
+    const ctl = row.querySelector(".s-value");
+    const spec = CAT().capabilities[cap];
+    let value = ctl ? ctl.value : "";
+    if (spec && spec.type === "range") value = Number(value);
+    const type = t.charAt(0) === "d" ? "device" : t.charAt(0) === "r" ? "room" : "category";
+    return {target: {type: type, id: t.slice(2)}, capability: cap, value: value};
+  }
+  function addStep() {
+    const row = document.createElement("div");
+    row.className = "step"; row.style.marginBottom = ".6rem"; row.setAttribute("role", "group");
+    row.innerHTML = '<span class="step-text t-set"></span><select class="s-target"></select><select class="s-cap"></select>' +
+      '<span class="step-text t-to"></span><span class="val-wrap"></span>' +
+      '<button type="button" class="btn small s-remove"></button>';
+    row.querySelector(".s-target").onchange = () => { fillCaps(row); fillValue(row); };
+    row.querySelector(".s-cap").onchange = () => fillValue(row);
+    row.querySelector(".s-remove").onclick = () => { row.remove(); renumber(); };
+    $("steps").appendChild(row);
+    buildRow(row);
+    renumber();
+  }
+  function refreshRows() {
+    if (!$("steps").children.length) { addStep(); return; }
+    Array.from($("steps").children).forEach(row => {
+      const keep = {target: row.querySelector(".s-target").value, cap: row.querySelector(".s-cap").value,
+                    value: (row.querySelector(".s-value") || {}).value};
+      buildRow(row, keep);
+    });
+    renumber();
+  }
+  $("addStep").onclick = () => { addStep(); $("steps").lastElementChild.querySelector(".s-target").focus(); };
+
+  function setCreate(open) {
+    $("createPanel").hidden = !open;
+    $("toggleCreate").setAttribute("aria-expanded", open);
+    if (open) $("r_name").focus(); else $("toggleCreate").focus();
+  }
+  $("toggleCreate").onclick = () => setCreate($("createPanel").hidden);
+  $("cancelCreate").onclick = () => setCreate(false);
+
+  $("routineForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("r_name").value.replace(/[\/\\?#%]/g, " ").trim();
+    if (!name) { HP.notify(HP.t("rt_name_req", "Please give your routine a name."), "bad"); $("r_name").focus(); return; }
+    const actions = Array.from($("steps").children).map(readRow);
+    if (actions.some(a => !a.capability || !a.target.id)) { HP.notify(HP.t("rt_step_req", "Please fill in every step."), "bad"); return; }
+    try { await HP.api("/routines", "POST", {name: name, actions: actions}); }
+    catch (err) { HP.serverError(); return; }
+    $("r_name").value = ""; $("steps").innerHTML = "";
+    HP.notify(HP.t("rt_saved", "Routine {n} was saved.", {n: '"' + name + '"'}));
+    await load();
+    setCreate(false);
+  });
+
+  HP.onLang(() => { drawList(); refreshRows(); renderResult(false); });
+
+  if (await load()) {
+    const wanted = new URLSearchParams(location.search).get("run");
+    if (wanted && routines[wanted]) runRoutine(wanted);
+  }
+});
+</script>
+</body>
+</html>

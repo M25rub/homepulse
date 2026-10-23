@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" data-size="normal" data-contrast="normal" data-motion="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helper - HomePulse</title>
+<meta name="theme-color" content="#17100B">
+<link rel="preload" href="/fonts/JosefinSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</head>
+<body data-page="helper">
+<main>
+  <div class="container">
+
+    <div class="page-head">
+      <h1 data-i18n="nav_helper">Helper</h1>
+      <p data-i18n="hp_sub">Ask in plain words. No jargon.</p>
+    </div>
+
+    <section class="section" aria-label="Helper">
+      <div id="chatHost" class="panel chat-page"></div>
+      <p id="langNote" class="note" data-i18n="hp_lang_note" hidden>For now, the helper replies in English.</p>
+    </section>
+
+  </div>
+</main>
+
+<script>
+HP.onReady(() => {
+  HP.mountChat($("chatHost"));
+  const note = () => { $("langNote").hidden = HP.lang === "en"; };
+  note();
+  HP.onLang(note);
+});
+</script>
+</body>
+</html>

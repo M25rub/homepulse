@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en" data-size="normal" data-contrast="normal" data-motion="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings - HomePulse</title>
+<meta name="theme-color" content="#17100B">
+<link rel="preload" href="/fonts/JosefinSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</head>
+<body data-page="setting">
+<main>
+  <div class="container">
+
+    <div class="page-head">
+      <h1 data-i18n="nav_settings">Settings</h1>
+      <p data-i18n="st_sub">Make HomePulse comfortable for you. Changes save automatically.</p>
+    </div>
+
+    <section class="opt-group" aria-labelledby="h-lang">
+      <h2 id="h-lang" data-i18n="lang_label">Language</h2>
+      <p data-i18n="st_lang_p">Choose the language for menus and buttons.</p>
+      <div class="opt-grid" id="langBtns" role="group" aria-labelledby="h-lang"></div>
+    </section>
+
+    <section class="opt-group" aria-labelledby="h-size">
+      <h2 id="h-size" data-i18n="st_text">Text size</h2>
+      <div class="opt-grid" id="sizeBtns" role="group" aria-labelledby="h-size"></div>
+    </section>
+
+    <section aria-label="Display options">
+      <div id="switches"></div>
+    </section>
+
+    <section class="opt-group" style="border-top:1px solid var(--line2)">
+      <button class="btn big" id="resetBtn" type="button" data-i18n="st_reset">Reset all settings</button>
+    </section>
+
+  </div>
+</main>
+
+<script>
+HP.onReady(() => {
+  const SIZES = [["small", "sz_small", "Smaller"], ["normal", "sz_normal", "Normal"], ["large", "sz_large", "Large"], ["xlarge", "sz_xl", "Extra large"]];
+  const SWITCHES = [
+    {k: "hp_contrast", title: ["st_contrast", "High contrast"], desc: ["st_contrast_p", "Strong black and white colors that are easier to see."], get: () => HP.recall("hp_contrast") === "1", on: "1", off: "0"},
+    {k: "hp_motion", title: ["st_motion", "Reduce motion"], desc: ["st_motion_p", "Turns off moving backgrounds and animations."], get: () => HP.recall("hp_motion") === "1", on: "1", off: "0"},
+    {k: "hp_cursor", title: ["st_cursor", "Cursor effect"], desc: ["st_cursor_p", "A soft ring that follows your mouse."], get: () => HP.recall("hp_cursor") !== "0", on: "1", off: "0"},
+    {k: "hp_bg", title: ["st_bg", "Animated background"], desc: ["st_bg_p", "The flowing lines behind the pages."], get: () => HP.recall("hp_bg") !== "0", on: "1", off: "0"},
+    {k: "hp_readaloud", title: ["hp_read", "Read replies aloud"], desc: null, get: () => HP.recall("hp_readaloud") === "1", on: "1", off: "0"}
+  ];
+
+  function render() {
+    const lb = $("langBtns");
+    lb.innerHTML = "";
+    HP.LANGS.forEach(l => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn"; b.textContent = l[1]; b.lang = l[0];
+      b.setAttribute("aria-pressed", HP.lang === l[0]);
+      b.onclick = () => { HP.setLang(l[0]); const nb = document.querySelector("#langBtns .btn[aria-pressed=\"true\"]"); if (nb) nb.focus(); };
+      lb.appendChild(b);
+    });
+
+    const sb = $("sizeBtns");
+    sb.innerHTML = "";
+    const cur = document.documentElement.dataset.size || "normal";
+    SIZES.forEach(s => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn"; b.textContent = HP.t(s[1], s[2]);
+      b.setAttribute("aria-pressed", cur === s[0]);
+      b.onclick = () => { HP.set("hp_size", s[0]); render(); const nb = document.querySelector("#sizeBtns .btn[aria-pressed=\"true\"]"); if (nb) nb.focus(); };
+      sb.appendChild(b);
+    });
+
+    const box = $("switches");
+    box.innerHTML = "";
+    SWITCHES.forEach(sw => {
+      const on = sw.get();
+      const title = HP.t(sw.title[0], sw.title[1]);
+      const row = document.createElement("div");
+      row.className = "switch-row";
+      row.innerHTML = '<div><h2>' + HP.esc(title) + "</h2>" + (sw.desc ? "<p>" + HP.esc(HP.t(sw.desc[0], sw.desc[1])) + "</p>" : "") + "</div>";
+      const wrap = document.createElement("div");
+      wrap.className = "sw-wrap";
+      const state = document.createElement("span");
+      state.className = "sw-state";
+      state.textContent = on ? HP.t("sw_on", "On") : HP.t("sw_off", "Off");
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "switch";
+      btn.setAttribute("role", "switch"); btn.setAttribute("aria-checked", on);
+      btn.setAttribute("aria-label", title);
+      btn.onclick = () => {
+        const next = !sw.get();
+        HP.set(sw.k, next ? sw.on : sw.off);
+        render();
+        HP.say(title + ": " + (next ? HP.t("sw_on", "On") : HP.t("sw_off", "Off")));
+        const again = Array.from(document.querySelectorAll(".switch")).find(x => x.getAttribute("aria-label") === title);
+        if (again) again.focus();
+      };
+      wrap.append(state, btn);
+      row.appendChild(wrap);
+      box.appendChild(row);
+    });
+  }
+
+  $("resetBtn").onclick = () => {
+    HP.store("hp_size", "normal"); HP.store("hp_contrast", "0"); HP.store("hp_motion", "0");
+    HP.store("hp_cursor", "1"); HP.store("hp_bg", "1"); HP.store("hp_readaloud", "0");
+    HP.applySettings(); HP.refreshEffects();
+    HP.setLang("en");
+    HP.notify(HP.t("st_reset_done", "Settings were reset."));
+    render();
+  };
+
+  HP.onLang(render);
+  render();
+});
+</script>
+</body>
+</html>

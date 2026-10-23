@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en" data-size="normal" data-contrast="normal" data-motion="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HomePulse</title>
+<meta name="description" content="HomePulse checks that your smart home really did what you asked, fixes what it can, and explains the result in plain words.">
+<meta name="theme-color" content="#17100B">
+<link rel="preload" href="/fonts/JosefinSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</head>
+<body data-page="home">
+<main>
+
+  <section class="container hero" aria-labelledby="h1">
+    <h1 id="h1">
+      <span class="line"><span class="line-in" style="--i:0" data-i18n="home_h1a">Home,</span></span>
+      <span class="line"><span class="line-in" style="--i:1" data-i18n="home_h1b">confirmed.</span></span>
+    </h1>
+    <div class="hero-foot">
+      <p class="lead" data-i18n="home_lead">HomePulse checks that every smart-home command really happened, fixes what it can, and shows you which devices keep letting you down.</p>
+      <a class="orb magnetic" data-strength="35" href="/routine.html"><span data-i18n="home_cta">Run a routine</span></a>
+    </div>
+    <p class="hero-meta" id="heroMeta"></p>
+  </section>
+
+  <section class="container manifesto">
+    <p data-manifesto data-i18n="home_manifesto">A command that was sent is not a job that was done. HomePulse checks every device, recovers what fails, and tells you which ones to fix.</p>
+  </section>
+
+  <section class="container pulse" aria-labelledby="h-pulse">
+    <h2 id="h-pulse" data-i18n="pulse_h">Your home's pulse</h2>
+    <div class="pulse-grid">
+      <div class="pulse-score" aria-live="polite">
+        <div class="pulse-num" id="pulseNum">-</div>
+        <div class="pulse-lbl" data-i18n="pulse_score">Health score</div>
+      </div>
+      <div>
+        <p class="pulse-head" id="pulseHead"></p>
+        <ul class="pulse-list" id="pulseList"></ul>
+        <p class="muted pulse-saved" id="pulseSaved"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="container pulse" aria-labelledby="h-watch">
+    <h2 id="h-watch" data-i18n="watch_h">Live watch</h2>
+    <p class="pulse-head" id="watchHead" role="status"></p>
+    <ul class="pulse-list" id="watchList"></ul>
+    <h3 id="h-events" class="watch-sub" data-i18n="watch_events_h" hidden>Recent outages</h3>
+    <ul class="pulse-list" id="eventList" aria-labelledby="h-events"></ul>
+    <p class="note"><a class="text-link" id="watchLink" href="/device.html" hidden data-i18n="watch_add">Add real devices to watch</a></p>
+  </section>
+
+  <section class="container" style="padding-block:6vh" aria-labelledby="h-rows">
+    <div class="rows-head">
+      <h2 id="h-rows" data-i18n="home_rows">Your devices, checked</h2>
+      <a class="text-link" href="/device.html" data-i18n="home_all">See all devices</a>
+    </div>
+    <div id="rows"></div>
+  </section>
+
+  <section class="paper" aria-labelledby="h-how">
+    <div class="container">
+      <h2 id="h-how" data-i18n="home_how">How it works</h2>
+      <ol class="steps">
+        <li><div class="step-no" aria-hidden="true">1</div><h3 data-i18n="home_s1t">You ask</h3><p class="muted" data-i18n="home_s1p">Press a routine, like Secure house.</p></li>
+        <li><div class="step-no" aria-hidden="true">2</div><h3 data-i18n="home_s2t">We check</h3><p class="muted" data-i18n="home_s2p">HomePulse looks at each device to see if it really did it.</p></li>
+        <li><div class="step-no" aria-hidden="true">3</div><h3 data-i18n="home_s3t">We fix it or tell you</h3><p class="muted" data-i18n="home_s3p">If something fails, we try again or use a backup route. If it still fails, we say so clearly.</p></li>
+      </ol>
+      <div class="cta-row">
+        <p style="font-family:var(--display);font-size:1.8rem;margin-bottom:.3rem" data-i18n="home_end_t">See it for yourself</p>
+        <p class="muted" style="margin-bottom:1.4rem" data-i18n="home_end_p">Run a routine and watch every device get checked.</p>
+        <a class="btn primary big" href="/routine.html" data-i18n="home_cta">Run a routine</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+HP.onReady(() => {
+  let devices = {}, last = null, pulse = null;
+
+  function drawPulse() {
+    if (!pulse) return;
+    $("pulseNum").textContent = pulse.score === null ? "-" : pulse.score;
+    const urgent = pulse.attention.filter(a => a.level === "urgent").length;
+    const watch = pulse.attention.length - urgent;
+    $("pulseHead").textContent = !pulse.total_checks
+      ? HP.t("pulse_none", "No commands have been checked yet. Run a routine and the pulse will fill in.")
+      : !pulse.attention.length
+        ? HP.t("pulse_ok", "Everything is healthy. {n} commands checked.", {n: pulse.total_checks})
+        : HP.t("pulse_att", "Needs attention now: {u}. To watch: {w}.", {u: urgent, w: watch});
+    const ul = $("pulseList");
+    ul.innerHTML = "";
+    pulse.attention.forEach(a => {
+      const li = document.createElement("li");
+      li.dataset.level = a.level;
+      const why = a.level === "urgent"
+        ? HP.t("pulse_r_fail", "Its last command was never confirmed ({f} failures in {c} checks). It looks unreachable.", {f: a.failed, c: a.checks})
+        : HP.t("pulse_r_frag", "It needed a retry or the backup route in {i} of its last {r} commands. It works, but not reliably.", {i: a.issues, r: a.recent});
+      const fix = a.level === "urgent"
+        ? HP.t("pulse_s_fail", "Check that it has power and Wi-Fi, then try again.")
+        : HP.t("pulse_s_frag", "Move it closer to the router, or check its power or battery.");
+      const tag = a.level === "urgent" ? HP.t("pulse_urgent", "Needs attention") : HP.t("pulse_watch", "Keep an eye on it");
+      li.innerHTML = '<span class="pill" data-s="' + (a.level === "urgent" ? "bad" : "retry") + '">' + HP.esc(tag) + '</span><strong>' + HP.esc(HP.devName(a.name)) + "</strong><span>" + HP.esc(why) + " " + HP.esc(fix) + "</span>";
+      ul.appendChild(li);
+    });
+    pulse.patterns.forEach(p => {
+      const li = document.createElement("li");
+      li.dataset.level = "pattern";
+      li.textContent = HP.t("pulse_pat", "{n} devices in {room} are struggling at once. The cause may be that room's Wi-Fi or a shared hub.", {n: p.devices.length, room: p.room});
+      ul.appendChild(li);
+    });
+    $("pulseSaved").textContent = pulse.saved_by_recovery
+      ? HP.t("pulse_saved", "{n} commands didn't work first time and were recovered by a retry or the backup route.", {n: pulse.saved_by_recovery}) : "";
+  }
+
+  const clock = iso => {
+    const d = new Date(iso); if (isNaN(d)) return "";
+    const today = new Date().toDateString() === d.toDateString();
+    return (today ? "" : d.toLocaleDateString([], {day: "numeric", month: "short"}) + ", ") + d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+  };
+  const span = s => s < 90 ? HP.t("w_secs", "{n} seconds", {n: s}) : s < 5400 ? HP.t("w_mins", "{n} minutes", {n: Math.round(s / 60)}) : HP.t("w_hours", "{n} hours", {n: Math.round(s / 360) / 10});
+
+  function drawWatch(w) {
+    const list = $("watchList"), ev = $("eventList");
+    list.innerHTML = ""; ev.innerHTML = "";
+    $("watchLink").hidden = w.devices.length > 0;
+    $("h-events").hidden = !w.events.length;
+    if (!w.devices.length) {
+      $("watchHead").textContent = HP.t("watch_none", "Nothing is being watched yet. Real devices, like your router and the internet, are checked in the background once you add them.");
+      return;
+    }
+    $("watchHead").textContent = w.running
+      ? HP.t("watch_on", "Watching {n} real device(s). Each is checked every {s} seconds.", {n: w.devices.length, s: Math.round(w.interval_seconds)})
+      : HP.t("watch_off", "The background watch is switched off, so these are only checked when you press a button.");
+    w.devices.forEach(d => {
+      const li = document.createElement("li");
+      const s = d.status === "up" ? "ok" : d.status === "down" ? "bad" : "retry";
+      const word = d.status === "up" ? HP.t("w_up", "Up") : d.status === "down" ? HP.t("w_down", "Down") : HP.t("w_unk", "Not checked yet");
+      const note = d.status === "up" ? HP.t("w_up_since", "Answering since {t}.", {t: clock(d.since)})
+        : d.status === "down" ? HP.t("w_down_since", "Not answering since {t}.", {t: clock(d.since)})
+        : HP.t("w_wait", "The first check is on its way.");
+      const last = d.last_checked ? " " + HP.t("w_last", "Last checked {t}.", {t: clock(d.last_checked)}) : "";
+      li.innerHTML = '<span class="pill" data-s="' + s + '">' + HP.esc(word) + "</span><strong>" + HP.esc(HP.devName(d.name)) + "</strong><span>" + HP.esc(note + last) + "</span>";
+      list.appendChild(li);
+    });
+    w.events.slice(0, 8).forEach(e => {
+      const li = document.createElement("li");
+      li.textContent = e.type === "went_down"
+        ? HP.t("w_ev_down", "{n} stopped answering at {t}.", {n: HP.devName(e.name), t: clock(e.at)})
+        : HP.t("w_ev_up", "{n} came back at {t}, after {d}.", {n: HP.devName(e.name), t: clock(e.at), d: span(e.down_for_seconds)});
+      ev.appendChild(li);
+    });
+  }
+
+  async function loadWatch() {
+    try { drawWatch(await HP.api("/watch")); } catch (e) { /* the next poll will try again */ }
+  }
+  setInterval(() => { if (!document.hidden) loadWatch(); }, 15000);
+
+  async function load() {
+    try {
+      const [d, h, p] = await Promise.all([HP.api("/devices"), HP.api("/history"), HP.api("/pulse")]);
+      devices = d; last = h[0] || null; pulse = p;
+      drawPulse();
+      draw();
+      loadWatch();
+    } catch (e) { HP.serverError(); }
+  }
+
+  function draw() {
+    const list = Object.values(devices);
+    $("heroMeta").textContent = HP.t("meta_line", "{n} devices, simulated demo", {n: list.length});
+    const box = $("rows");
+    box.innerHTML = "";
+    if (!list.length) {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.innerHTML = "<h3>" + HP.esc(HP.t("home_empty_t", "Your home is empty")) + "</h3><p>" + HP.esc(HP.t("home_empty_p", "Load a sample home to see HomePulse in action.")) + "</p>";
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn primary"; b.textContent = HP.t("btn_sample", "Load a sample home");
+      b.onclick = async () => { try { await HP.loadSample(); await load(); } catch (err) { HP.serverError(); } };
+      e.appendChild(b);
+      box.appendChild(e);
+      return;
+    }
+    list.slice(0, 6).forEach(d => {
+      const res = last && last.results.find(r => r.device === d.name);
+      let st;
+      if (res) {
+        const x = HP.describe(res);
+        st = '<span class="pill" data-s="' + x.s + '"><span aria-hidden="true">' + x.ic + "</span>" + HP.esc(x.word) + "</span>";
+      } else {
+        st = '<span class="pill">' + HP.esc(HP.t("home_none", "Not checked yet")) + "</span>";
+      }
+      const a = document.createElement("a");
+      a.className = "trow"; a.href = "/device.html";
+      a.innerHTML = '<span class="kind">' + HP.esc(HP.catLabel(d.category)) + '</span><span class="nm">' + HP.esc(HP.devName(d.name)) + '</span><span class="st">' + st + "</span>";
+      box.appendChild(a);
+    });
+  }
+
+  HP.onLang(() => { draw(); drawPulse(); });
+  load();
+});
+</script>
+</body>
+</html>

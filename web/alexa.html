@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-size="normal" data-contrast="normal" data-motion="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alexa+ (simulated) - HomePulse</title>
+<meta name="theme-color" content="#17100B">
+<link rel="preload" href="/fonts/JosefinSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</head>
+<body data-page="alexa">
+<main>
+  <div class="container">
+
+    <div class="page-head">
+      <h1 data-i18n="nav_alexa">Alexa+</h1>
+      <p data-i18n="alexa_sub">A simulated Alexa+. Every request below is a real MCP call to HomePulse, the same one an outside assistant would make.</p>
+    </div>
+
+    <section class="section" aria-labelledby="h-ask">
+      <div class="panel">
+        <h2 id="h-ask" data-i18n="alexa_ask_t">What should Alexa+ ask HomePulse to do?</h2>
+        <form id="askForm" class="form" novalidate>
+          <div class="field">
+            <label for="a_kind" data-i18n="alexa_kind">Request</label>
+            <select id="a_kind">
+              <option value="set" data-i18n="alexa_k_set">Change a device</option>
+              <option value="routine" data-i18n="alexa_k_routine">Run a routine</option>
+              <option value="check" data-i18n="alexa_k_check">Check a real device is reachable</option>
+              <option value="pulse" data-i18n="alexa_k_pulse">How is my home doing?</option>
+              <option value="outages" data-i18n="alexa_k_outages">Has anything gone offline?</option>
+            </select>
+          </div>
+
+          <div id="grp_set" class="form">
+            <div class="field"><label for="a_dev" data-i18n="alexa_device">Device</label><select id="a_dev"></select></div>
+            <div class="field"><label for="a_cap" data-i18n="alexa_cap">What to change</label><select id="a_cap"></select></div>
+            <div class="field" id="a_valBox"><label for="a_val" data-i18n="alexa_val">Value</label></div>
+          </div>
+          <div id="grp_routine" class="field" hidden><label for="a_routine" data-i18n="alexa_routine">Routine</label><select id="a_routine"></select></div>
+          <div id="grp_check" class="field" hidden><label for="a_live" data-i18n="alexa_live">Real device</label><select id="a_live"></select></div>
+
+          <div class="actions">
+            <button class="btn primary big" id="askBtn" type="submit" data-i18n="alexa_go">Ask HomePulse</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="section" id="outSection" aria-labelledby="h-out" hidden>
+      <h2 class="sr-only" id="h-out" data-i18n="alexa_says_t">What Alexa+ says</h2>
+      <div class="panel">
+        <p class="muted" data-i18n="alexa_says_l">Alexa+ says:</p>
+        <div class="msg bot" id="says" role="status" aria-live="polite"></div>
+        <p class="note" id="sayNote"></p>
+        <div class="actions"><button class="btn" id="readBtn" type="button" data-i18n="btn_read">Read this aloud</button></div>
+      </div>
+      <div class="panel">
+        <h2 data-i18n="alexa_trace_t">Under the hood: the real MCP calls</h2>
+        <p class="muted" data-i18n="alexa_trace_p">A change always comes back PENDING first. Alexa+ is only allowed to say "done" after get_command_status says VERIFIED.</p>
+        <div id="trace" class="trace"></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+HP.onReady(async () => {
+  let devices = {}, routines = {};
+  const kinds = ["set", "routine", "check", "pulse"];
+
+  try { await HP.loadCatalog(); } catch (e) { HP.serverError(); return; }
+  try { [devices, routines] = await Promise.all([HP.api("/devices"), HP.api("/routines")]); }
+  catch (e) { HP.serverError(); return; }
+
+  const opt = (sel, value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; sel.appendChild(o); };
+
+  function fillDevices() {
+    const dev = $("a_dev"), keep = dev.value;
+    dev.innerHTML = "";
+    Object.values(devices).forEach(d => opt(dev, d.id, HP.devName(d.name)));
+    if (keep && devices[keep]) dev.value = keep;
+    const live = $("a_live");
+    live.innerHTML = "";
+    Object.values(devices).filter(d => d.behavior === "live").forEach(d => opt(live, d.id, HP.devName(d.name)));
+    const rt = $("a_routine");
+    rt.innerHTML = "";
+    Object.keys(routines).forEach(n => opt(rt, n, n));
+    fillCaps();
+  }
+
+  function fillCaps() {
+    const d = devices[$("a_dev").value], cap = $("a_cap"), keep = cap.value;
+    cap.innerHTML = "";
+    ((d && d.capabilities) || []).forEach(c => opt(cap, c, HP.capLabel(c)));
+    if (keep && Array.from(cap.options).some(o => o.value === keep)) cap.value = keep;
+    fillValue();
+  }
+
+  function fillValue() {
+    const box = $("a_valBox"), old = $("a_val");
+    if (old) old.remove();
+    const spec = HP.catalog.capabilities[$("a_cap").value];
+    if (!spec) return;
+    let ctl;
+    if (spec.type === "range") {
+      ctl = document.createElement("input");
+      ctl.type = "number"; ctl.min = spec.min; ctl.max = spec.max; ctl.value = spec.default;
+    } else {
+      ctl = document.createElement("select");
+      spec.options.forEach(o => opt(ctl, o, HP.stateLabel(o)));
+    }
+    ctl.id = "a_val";
+    box.appendChild(ctl);
+  }
+
+  function showGroups() {
+    const k = $("a_kind").value;
+    $("grp_set").hidden = k !== "set";
+    $("grp_routine").hidden = k !== "routine";
+    $("grp_check").hidden = k !== "check";
+  }
+
+  $("a_kind").addEventListener("change", showGroups);
+  $("a_dev").addEventListener("change", fillCaps);
+  $("a_cap").addEventListener("change", fillValue);
+
+  function request() {
+    const k = $("a_kind").value;
+    if (k === "set") return {tool: "set_device_state", arguments: {device_id: $("a_dev").value, capability: $("a_cap").value, value: String($("a_val").value)}};
+    if (k === "routine") return {tool: "run_routine", arguments: {routine_name: $("a_routine").value}};
+    if (k === "check") return {tool: "check_device", arguments: {device_id: $("a_live").value}};
+    if (k === "outages") return {tool: "get_outages", arguments: {hours: 24}};
+    return {tool: "get_home_pulse", arguments: {}};
+  }
+
+  function drawTrace(trace) {
+    const box = $("trace");
+    box.innerHTML = "";
+    trace.forEach((step, i) => {
+      const status = step.response.status || "OK";
+      const d = document.createElement("details");
+      d.open = true;
+      const s = document.createElement("summary");
+      s.textContent = (i + 1) + ". " + step.tool + "  ->  " + status + "  (" + step.ms + " ms)";
+      d.appendChild(s);
+      const a = document.createElement("pre");
+      a.className = "code"; a.tabIndex = 0;
+      a.textContent = "call " + step.tool + "(" + JSON.stringify(step.arguments) + ")\n\nanswer\n" + JSON.stringify(step.response, null, 2);
+      a.setAttribute("aria-label", step.tool + " request and answer");
+      d.appendChild(a);
+      box.appendChild(d);
+    });
+  }
+
+  $("askForm").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const k = $("a_kind").value;
+    if ((k === "check" && !$("a_live").value)) { HP.notify(HP.t("alexa_no_live", "Add a real device first, on the Devices page (Check my real network does it in one click)."), "bad"); return; }
+    if (k === "set" && !$("a_dev").value) { HP.notify(HP.t("alexa_no_dev", "There are no devices yet. Add some on the Devices page."), "bad"); return; }
+    const btn = $("askBtn");
+    btn.disabled = true; btn.textContent = HP.t("alexa_working", "Waiting for HomePulse...");
+    try {
+      const r = await HP.api("/alexa/run", "POST", request());
+      $("outSection").hidden = false;
+      $("says").textContent = r.says;
+      $("sayNote").textContent = r.trace.length > 1
+        ? HP.t("alexa_note_pending", "HomePulse answered PENDING first, so Alexa+ kept asking until the answer was final.")
+        : "";
+      drawTrace(r.trace);
+      HP.say(r.says);
+      try { devices = await HP.api("/devices"); } catch (e) { /* keep the old list */ }
+      $("outSection").scrollIntoView({block: "start"});
+    } catch (e) { HP.serverError(); }
+    btn.disabled = false; btn.textContent = HP.t("alexa_go", "Ask HomePulse");
+  });
+
+  $("readBtn").addEventListener("click", () => HP.speak($("says").textContent));
+  HP.onLang(() => { fillDevices(); });
+  fillDevices();
+  showGroups();
+});
+</script>
+</body>
+</html>

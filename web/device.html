@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en" data-size="normal" data-contrast="normal" data-motion="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devices - HomePulse</title>
+<meta name="theme-color" content="#17100B">
+<link rel="preload" href="/fonts/JosefinSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</head>
+<body data-page="device">
+<main>
+  <div class="container">
+
+    <div class="page-head head-row">
+      <div>
+        <h1 data-i18n="nav_devices">Devices</h1>
+        <p data-i18n="dev_sub">Every device HomePulse looks after.</p>
+      </div>
+      <div class="actions">
+        <button class="btn primary big" id="netBtn" type="button" data-i18n="dev_net">Check my real network</button>
+        <button class="btn big" id="discoverBtn" type="button" data-i18n="dev_discover">Discover devices</button>
+        <button class="btn big" id="scanBtn" type="button" data-i18n="dev_scan">Scan my network</button>
+        <button class="btn big" id="toggleAdd" type="button" aria-expanded="false" aria-controls="addPanel" data-i18n="dev_add_t">Add a device</button>
+      </div>
+    </div>
+    <p class="note" data-i18n="dev_net_p">Check my real network finds your router, adds it and the internet, and really checks both. No devices needed.</p>
+    <p class="note" data-i18n="dev_discover_p">Like saying Alexa, discover my devices. HomePulse looks for devices nearby and adds them.</p>
+    <p class="note"><button class="text-link" id="toggleImport" type="button" aria-expanded="false" aria-controls="importPanel" data-i18n="dev_import_dev">For developers: import Alexa JSON</button></p>
+
+    <section id="netPanel" class="section" aria-labelledby="h-net" hidden>
+      <div class="panel">
+        <h2 id="h-net" data-i18n="dev_net_t">Your real network, checked just now</h2>
+        <p id="netSummary" role="status"></p>
+        <p class="muted" id="netNote"></p>
+        <div id="netRows"></div>
+        <p class="note"><a href="/index.html" data-i18n="dev_net_link">See your home's health on the Home page</a></p>
+      </div>
+    </section>
+
+    <section id="scanPanel" class="section" aria-labelledby="h-scan" hidden>
+      <div class="panel">
+        <h2 id="h-scan" data-i18n="dev_scan">Scan my network</h2>
+        <p class="muted" id="scanNote" role="status"></p>
+        <div id="scanList"></div>
+      </div>
+    </section>
+
+    <section id="importPanel" class="section" aria-labelledby="h-import" hidden>
+      <div class="panel">
+        <h2 id="h-import" data-i18n="dev_import_dev">For developers: import Alexa JSON</h2>
+        <p data-i18n="dev_import_p">For developers: paste the discovery response (JSON) from an Alexa Smart Home skill. Most people don't need this. Use Discover devices or Add a device instead.</p>
+        <div class="form" style="max-width:none">
+          <textarea id="importText" spellcheck="false" aria-label="Import from Alexa" data-i18n-aria-label="dev_import"></textarea>
+          <div class="actions">
+            <button class="btn primary big" id="importBtn" type="button" data-i18n="dev_import_btn">Import devices</button>
+            <button class="btn big" id="exampleBtn" type="button" data-i18n="dev_import_example">Use an example</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="addPanel" class="section" aria-labelledby="h-add" hidden>
+      <div class="panel">
+        <h2 id="h-add" data-i18n="dev_add_t">Add a device</h2>
+        <p data-i18n="dev_add_sub">Three quick questions. No technical knowledge needed.</p>
+        <form id="deviceForm" class="form" novalidate>
+          <div class="field">
+            <label for="d_name" data-i18n="dev_q1">1. What is it called?</label>
+            <input id="d_name" autocomplete="off" placeholder="e.g. Patio light" data-i18n-placeholder="dev_ph_name">
+          </div>
+          <div class="field">
+            <label for="d_cat" data-i18n="dev_q2">2. What kind of device is it?</label>
+            <select id="d_cat"></select>
+          </div>
+          <div class="field" id="liveFields" hidden>
+            <label for="d_adapter" data-i18n="dev_ad_label">What kind of device is it?</label>
+            <select id="d_adapter" style="margin-bottom:1rem">
+              <option value="" data-i18n="dev_ad_none">Just check that it answers</option>
+              <option value="shelly_gen1">Shelly plug (Gen1)</option>
+              <option value="shelly_gen2">Shelly plug (Gen2 and newer)</option>
+              <option value="tasmota">Tasmota plug</option>
+            </select>
+            <label for="d_addr" data-i18n="dev_addr">Address to check</label>
+            <input id="d_addr" autocomplete="off" inputmode="url" placeholder="http://192.168.1.20  or  192.168.1.20:80">
+            <p class="muted" style="margin:.4rem 0 1rem" data-i18n="dev_addr_help">HomePulse will really try to reach this address. Use a device on your own network, or any website.</p>
+            <label for="d_fb" data-i18n="dev_fb">Backup address (optional)</label>
+            <input id="d_fb" autocomplete="off" inputmode="url" placeholder="http://192.168.1.21">
+          </div>
+          <div class="field">
+            <label for="d_room" data-i18n="dev_room">3. Which room is it in? (optional)</label>
+            <input id="d_room" autocomplete="off" placeholder="e.g. Kitchen" data-i18n-placeholder="dev_ph_room">
+          </div>
+          <details class="demo">
+            <summary>Demo tools (for testing only)</summary>
+            <p class="muted" style="margin:.4rem 0 1rem">Make this device misbehave on purpose, so you can watch HomePulse recover.</p>
+            <div class="field" style="margin-bottom:.8rem">
+              <label for="d_behavior">How should it behave?</label>
+              <select id="d_behavior">
+                <option value="ok">Works normally</option>
+                <option value="flaky">Ignores the first command</option>
+                <option value="cloud_down">Internet route is broken</option>
+                <option value="offline">Completely offline</option>
+              </select>
+            </div>
+          </details>
+          <div class="actions">
+            <button class="btn primary big" type="submit" data-i18n="dev_add_t">Add a device</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="section" aria-label="Devices">
+      <h2 class="sr-only" data-i18n="nav_devices">Devices</h2>
+      <div id="list"></div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+HP.onReady(async () => {
+  let devices = {};
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  /* a small example in the format Amazon's discovery uses, so you can see import work */
+  const EXAMPLE = {event: {header: {namespace: "Alexa.Discovery", name: "Discover.Response"}, payload: {endpoints: [
+    {endpointId: "study-lamp-01", friendlyName: "Study lamp", displayCategories: ["LIGHT"], capabilities: [
+      {type: "AlexaInterface", interface: "Alexa.PowerController", version: "3", properties: {supported: [{name: "powerState"}], retrievable: true}},
+      {type: "AlexaInterface", interface: "Alexa.BrightnessController", version: "3", properties: {supported: [{name: "brightness"}], retrievable: true}},
+      {type: "AlexaInterface", interface: "Alexa", version: "3"}]},
+    {endpointId: "shed-lock-02", friendlyName: "Shed lock", displayCategories: ["SMARTLOCK"], capabilities: [
+      {type: "AlexaInterface", interface: "Alexa.LockController", version: "3", properties: {supported: [{name: "lockState"}], retrievable: true}}]}
+  ]}}};
+
+  try { await HP.loadCatalog(); } catch (e) { HP.serverError(); }
+
+  async function load() {
+    try { devices = await HP.api("/devices"); drawList(); }
+    catch (e) { HP.serverError(); }
+  }
+
+  function drawList() {
+    const box = $("list");
+    box.innerHTML = "";
+    const list = Object.values(devices);
+    if (!list.length) {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.innerHTML = "<h3>" + HP.esc(HP.t("home_empty_t", "Your home is empty")) + "</h3><p>" + HP.esc(HP.t("dev_empty_p", "Add a device below, or start with a sample home.")) + "</p>";
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn primary"; b.textContent = HP.t("btn_sample", "Load a sample home");
+      b.onclick = async () => { try { await HP.loadSample(); await load(); } catch (err) { HP.serverError(); } };
+      e.appendChild(b);
+      box.appendChild(e);
+      return;
+    }
+    list.forEach(d => {
+      const row = document.createElement("div");
+      row.className = "item";
+      const what = HP.catLabel(d.category);
+      const where = d.room ? HP.t("dev_row", "{k}, in {r}", {k: what, r: HP.roomName(d.room)}) : what;
+      row.innerHTML = '<div class="item-main"><h3>' + HP.esc(HP.devName(d.name)) + "</h3><p>" + HP.esc(where) + "</p>" +
+        '<p class="state-line">' + HP.esc(HP.deviceLine(d)) + "</p>" +
+        (d.behavior && d.behavior !== "ok" ? '<span class="tag">Demo: ' + HP.esc(HP.pretty(d.behavior)) + "</span>" : "") + "</div>";
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+      const rm = document.createElement("button");
+      rm.type = "button"; rm.className = "btn small";
+      rm.textContent = HP.t("btn_remove", "Remove");
+      rm.setAttribute("aria-label", HP.t("btn_remove", "Remove") + ": " + HP.devName(d.name));
+      rm.onclick = async () => {
+        if (!confirm(HP.t("dev_confirm", "Remove {n} from your home?", {n: '"' + HP.devName(d.name) + '"'}))) return;
+        try {
+          await HP.api("/devices/" + encodeURIComponent(d.id), "DELETE");
+          HP.notify(HP.t("dev_removed", "{n} was removed.", {n: HP.devName(d.name)}));
+          load();
+        } catch (e) { HP.serverError(); }
+      };
+      actions.appendChild(rm);
+      row.appendChild(actions);
+      box.appendChild(row);
+    });
+  }
+
+  /* open and close the two panels */
+  function setPanel(which, open) {
+    const map = {import: ["importPanel", "toggleImport", "importText"], add: ["addPanel", "toggleAdd", "d_name"]};
+    Object.keys(map).forEach(k => {
+      const isThis = k === which && open;
+      $(map[k][0]).hidden = !isThis;
+      $(map[k][1]).setAttribute("aria-expanded", isThis);
+    });
+    if (open) $(map[which][2]).focus();
+  }
+  $("toggleImport").onclick = () => setPanel("import", $("importPanel").hidden);
+  $("toggleAdd").onclick = () => setPanel("add", $("addPanel").hidden);
+
+  /* discover: pretend to scan the network, like "Alexa, discover my devices" */
+  $("discoverBtn").onclick = async () => {
+    const b = $("discoverBtn");
+    b.disabled = true;
+    HP.notify(HP.t("dev_searching", "Searching for devices..."));
+    try {
+      await sleep(900);
+      const r = await HP.api("/devices/discover", "POST");
+      HP.notify(r.found ? HP.t("dev_found", "Found {n} new devices.", {n: r.found}) : HP.t("dev_none_new", "No new devices found."));
+      await load();
+    } catch (e) { HP.serverError(); }
+    b.disabled = false;
+  };
+
+  /* import from Alexa's discovery JSON */
+  $("exampleBtn").onclick = () => { $("importText").value = JSON.stringify(EXAMPLE, null, 2); $("importText").focus(); };
+  $("importBtn").onclick = async () => {
+    let payload;
+    try { payload = JSON.parse($("importText").value); }
+    catch (e) { HP.notify(HP.t("dev_import_bad", "That doesn't look like Alexa discovery JSON. Check it and try again."), "bad"); $("importText").focus(); return; }
+    try {
+      const r = await HP.api("/devices/import", "POST", payload);
+      HP.notify(HP.t("dev_import_done", "Imported {n} devices. {m} could not be imported.", {n: r.added, m: r.skipped}));
+      $("importText").value = "";
+      await load();
+    } catch (e) {
+      if (e instanceof TypeError) HP.serverError();
+      else HP.notify(HP.t("dev_import_bad", "That doesn't look like Alexa discovery JSON. Check it and try again."), "bad");
+    }
+  };
+
+  /* add one by hand: a name, a kind and (optionally) a room */
+  function fillCategories() {
+    const cats = HP.catalog ? Object.keys(HP.catalog.categories) : ["light"];
+    HP.fillSelect($("d_cat"), cats, HP.catLabel, $("d_cat").value || "light");
+  }
+  const showLive = () => { $("liveFields").hidden = $("d_cat").value !== "network"; };
+  $("d_cat").addEventListener("change", showLive);
+  $("deviceForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("d_name").value.trim();
+    if (!name) { HP.notify(HP.t("dev_name_req", "Please give your device a name."), "bad"); $("d_name").focus(); return; }
+    const live = $("d_cat").value === "network";
+    if (live && !$("d_addr").value.trim()) { HP.notify(HP.t("dev_addr_req", "Please enter an address to check."), "bad"); $("d_addr").focus(); return; }
+    try {
+      await HP.api("/devices", "POST", {name: name, category: $("d_cat").value, room: $("d_room").value.trim(), behavior: $("d_behavior").value,
+        address: live ? $("d_addr").value.trim() : "", fallback_address: live ? $("d_fb").value.trim() : "",
+        adapter: live ? $("d_adapter").value : ""});
+    } catch (err) {
+      if (err instanceof TypeError) { HP.serverError(); return; }
+      let msg = err.message; try { msg = JSON.parse(msg).detail || msg; } catch (x) {}
+      HP.notify(msg, "bad"); return;
+    }
+    $("d_name").value = ""; $("d_room").value = ""; $("d_behavior").value = "ok"; $("d_addr").value = ""; $("d_fb").value = ""; $("d_adapter").value = ""; showLive();
+    HP.notify(HP.t("dev_added", "{n} was added to your home.", {n: name}));
+    setPanel("add", false);
+    load();
+  });
+
+
+  /* really scan the local network, then let the person choose what to add */
+  function drawScan(r) {
+    $("scanPanel").hidden = false;
+    const box = $("scanList");
+    box.innerHTML = "";
+    $("scanNote").textContent = r.devices.length
+      ? HP.t("dev_scan_found", "{n} devices answered. Add the ones you want HomePulse to watch.", {n: r.devices.length})
+      : HP.t("dev_scan_none", "No devices answered. Your firewall, Wi-Fi or router may block discovery (guest networks often do), or nothing on this network supports it.");
+    r.devices.forEach(dev => {
+      const row = document.createElement("div");
+      row.className = "item";
+      const main = document.createElement("div");
+      main.className = "item-main";
+      const h = document.createElement("h3"); h.textContent = dev.name;
+      const p = document.createElement("p"); p.textContent = [dev.maker, dev.model, dev.address].filter(Boolean).join(" \u00b7 ");
+      main.appendChild(h); main.appendChild(p); row.appendChild(main);
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn";
+      b.textContent = dev.already_added ? HP.t("dev_scan_added", "Added") : HP.t("dev_scan_add", "Add");
+      b.disabled = !!dev.already_added;
+      b.onclick = async () => {
+        try {
+          await HP.api("/devices", "POST", {name: dev.name, category: "network", address: dev.address});
+          b.textContent = HP.t("dev_scan_added", "Added"); b.disabled = true;
+          HP.notify(HP.t("dev_added", "{n} was added to your home.", {n: dev.name}));
+          load();
+        } catch (err) {
+          if (err instanceof TypeError) { HP.serverError(); return; }
+          let msg = err.message; try { msg = JSON.parse(msg).detail || msg; } catch (x) {}
+          HP.notify(msg, "bad");
+        }
+      };
+      row.appendChild(b);
+      box.appendChild(row);
+    });
+  }
+  $("scanBtn").addEventListener("click", async () => {
+    const btn = $("scanBtn");
+    btn.disabled = true; btn.textContent = HP.t("dev_scan_busy", "Scanning...");
+    try { drawScan(await HP.api("/devices/scan", "POST")); }
+    catch (err) { HP.serverError(); }
+    btn.disabled = false; btn.textContent = HP.t("dev_scan", "Scan my network");
+  });
+
+  $("netBtn").addEventListener("click", async () => {
+    const btn = $("netBtn");
+    btn.disabled = true; btn.textContent = HP.t("dev_net_busy", "Checking...");
+    try {
+      const r = await HP.api("/devices/quickstart", "POST");
+      $("netPanel").hidden = false;
+      $("netSummary").textContent = r.summary;
+      $("netNote").textContent = r.note || "";
+      const rows = $("netRows");
+      rows.innerHTML = "";
+      r.results.forEach(x => {
+        const row = document.createElement("div");
+        row.className = "item";
+        const w = HP.describe(x);
+        row.innerHTML = '<div class="item-main"><h3>' + HP.esc(HP.devName(x.device)) + "</h3><p>" + HP.esc(w.text) + "</p></div>" +
+          '<div class="item-actions"><span class="tag">' + HP.esc(w.word) + "</span></div>";
+        rows.appendChild(row);
+      });
+      HP.say(r.summary);
+      await load();
+      $("netPanel").scrollIntoView({block: "start"});
+    } catch (err) { HP.serverError(); }
+    btn.disabled = false; btn.textContent = HP.t("dev_net", "Check my real network");
+  });
+
+  HP.onLang(() => { fillCategories(); drawList(); });
+  fillCategories();
+  load();
+});
+</script>
+</body>
+</html>

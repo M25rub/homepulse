@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" data-size="normal" data-contrast="normal" data-motion="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About - HomePulse</title>
+<meta name="theme-color" content="#17100B">
+<link rel="preload" href="/fonts/JosefinSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+</head>
+<body data-page="about">
+<main>
+  <div class="container">
+
+    <div class="page-head">
+      <h1 data-i18n="ab_title">About HomePulse</h1>
+      <p data-i18n="ab_sub">Why it exists, how it works, and what is real today.</p>
+    </div>
+
+    <section class="two-col" aria-label="Problem and fix">
+      <div>
+        <h2 data-i18n="ab_prob_t">The problem</h2>
+        <p data-i18n="ab_prob_p">Smart devices sometimes fail quietly: a lock that did not turn, a light that ignored the message. You often find out later, by accident, and nothing tells you which devices keep failing.</p>
+      </div>
+      <div>
+        <h2 data-i18n="ab_fix_t">The fix</h2>
+        <p data-i18n="ab_fix_p">HomePulse sends the command, checks the real state of the device, tries again if needed, uses a backup route, and tells you what really happened. Then it remembers, so you can see which devices are reliable and which need fixing.</p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="h-status" style="padding-bottom:2rem">
+      <h2 id="h-status" style="font-family:var(--display);font-size:clamp(1.8rem,3.4vw,2.6rem);letter-spacing:-.02em" data-i18n="ab_status_t">Where things stand</h2>
+      <ul class="status-list">
+        <li><span data-i18n="ab_i1">Checking, retrying and backup routes</span><span class="pill tag-done" data-i18n="tag_done">Working</span></li>
+        <li><span data-i18n="ab_i2">Smart devices (simulated for now)</span><span class="pill tag-sim" data-i18n="tag_sim">Simulated</span></li>
+        <li><span data-i18n="ab_i3">Helper that answers from your home's real data</span><span class="pill tag-done" data-i18n="tag_done">Working</span></li>
+        <li><span data-i18n="ab_i4">MCP server for Alexa+ and other assistants</span><span class="pill tag-done" data-i18n="tag_done">Working</span></li>
+        <li><span data-i18n="ab_i5">Real phone and email alerts</span><span class="pill tag-plan" data-i18n="tag_plan">Planned</span></li>
+        <li><span data-i18n="ab_i6">Running in the cloud on AWS</span><span class="pill tag-plan" data-i18n="tag_plan">Planned</span></li>
+      </ul>
+    </section>
+
+  </div>
+</main>
+</body>
+</html>
