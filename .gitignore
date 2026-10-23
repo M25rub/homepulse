@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.vscode/
+node_modules/
+
+# your own home data (the app creates it)
+home.json
+home.json.bak
+home.damaged-*.json
+.home-*.tmp
